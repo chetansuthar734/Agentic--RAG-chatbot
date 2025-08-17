@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.vectorstores import InMemoryVectorStore
-# from langchain.embeddings import HuggingFaceEmbeddings
+
 from langgraph.graph import StateGraph
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import TypedDict
@@ -21,22 +21,21 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins
+    allow_origins=["*"],  # allow origin for local development
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True
 )
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-# from langchain.embeddings import HuggingFaceEmbeddings
-# embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
 
 import os
-os.environ["GOOGLE_API_KEY"] = "AIzaSyDK1CNcAhSrM4qy3UVIXLu7J7Qk2U51Rug"  # dont add direct to GoogleGenerativeAI other give credential error
+os.environ["GOOGLE_API_KEY"] = "********"  
 embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 vectorstore = InMemoryVectorStore(embedding)
 
 
-llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash', api_key="AIzaSyDK1CNcAhSrM4qy3UVIXLu7J7Qk2U51Rug")
+llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
 
 
 from langchain.prompts import ChatPromptTemplate
@@ -65,24 +64,6 @@ builder.add_edge("__start__", "rag_node")
 graph = builder.compile()
 
 
-# from langgraph.store.memory import InMemoryStore 
-# @app.post("/upload-pdf/")
-# async def upload_pdf(file: UploadFile = File(...)):
-#     file_path = f"temp_{file.filename}"
-#     with open(file_path, "wb") as f:
-#         f.write(await file.read())
-
-#     loader = PyPDFLoader(file_path)
-#     docs = loader.load()
-
-#     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-#     split_docs = splitter.split_documents(docs)
-
-#     vectorstore.add_documents(split_docs)
-#     print('file upload by')
-    # return  {"status": "PDF added", "num_chunks": "Hi"}
-    # return  {"status": "PDF added", "num_chunks": str(len(split_docs))}
-#     # return {"status": "PDF added"}
 
 
 @app.post("/upload-pdf/")
