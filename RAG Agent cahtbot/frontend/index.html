@@ -179,12 +179,6 @@
 
 <div id="main">
 
-  <!-- Upload PDF -->
-  <!-- <div id="uploadSection">
-    <input type="file" id="pdfFile">
-    <button onclick="uploadPDF()">Upload</button>
-    <span id="uploadStatus"></span>
-  </div> -->
 
   <!-- Upload Section -->
 <div id="uploadSection">
@@ -217,10 +211,7 @@ function addMessage(sender, text) {
     chatDiv.scrollTop = chatDiv.scrollHeight;
 }
 
-
-// --------------------
-// Upload PDF
-// --------------------
+//pdf upload
 async function uploadPDF() {
     const fileInput = document.getElementById("pdfFile");
     const file = fileInput.files[0];
@@ -237,9 +228,8 @@ async function uploadPDF() {
     document.getElementById("uploadStatus").textContent = `Uploaded: ${data.num_chunks} chunks ✅`;
 }
 
-// --------------------
-// Chat via SSE
-// --------------------
+
+//  SSE
 function sendMessage() {
     const userInput = document.getElementById("userInput").value;
     if (!userInput) return;
