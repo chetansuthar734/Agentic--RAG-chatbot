@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RAG Chatbot</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: Arial, sans-serif;
+      background: #f9fafb;
+    }
+
+    header {
+      padding: 15px;
+      background: #4f46e5;
+      color: white;
+      font-size: 1.4rem;
+      text-align: center;
+    }
+
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+    }
+
+    /* Upload Section */
+  #uploadSection {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.uploadBox {
+  flex: 1;
+  padding: 14px;
+  border: 2px dashed #4f46e5;
+  border-radius: 10px;
+  text-align: center;
+  color: #4f46e5;
+  background: #f3f4f6;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.uploadBox:hover {
+  background: #e0e7ff;
+}
+
+#uploadStatus {
+  font-size: 0.9rem;
+  color: green;
+  font-weight: 500;
+}
+
+#chat {
+  flex: 1;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f9fafb;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* User bubble */
+.user-bubble {
+  align-self: flex-end;
+  background: #4f46e5;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 15px 15px 0 15px;
+  max-width: 70%;
+  word-wrap: break-word;
+}
+
+/* Bot bubble */
+.bot-bubble {
+  align-self: flex-start;
+  background: #10b981;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 15px 15px 15px 0;
+  max-width: 70%;
+  word-wrap: break-word;
+}
+
+/* Input bar */
+#inputBar {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+}
+#userInput {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+#inputBar button {
+  padding: 10px 16px;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#inputBar button:hover {
+  background: #4338ca;
+}
+
+
+    /* Chat Section */
+    #chat {
+      flex: 1;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      background: white;
+      overflow-y: auto;
+    }
+
+    .message {
+      margin: 8px 0;
+      padding: 10px 14px;
+      border-radius: 8px;
+      max-width: 70%;
+      word-wrap: break-word;
+    }
+    .user {
+      background: #dbeafe;
+      color: #1e3a8a;
+      align-self: flex-end;
+    }
+    .bot {
+      background: #e5e7eb;
+      color: #111827;
+      align-self: flex-start;
+    }
+
+    /* Input bar */
+    #inputBar {
+      display: flex;
+      margin-top: 10px;
+      gap: 10px;
+    }
+    #userInput {
+      flex: 1;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 6px;
+      background: #4f46e5;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #4338ca;
+    }
+  </style>
+</head>
+<body>
+
+<header>RAG Chatbot</header>
+
+<div id="main">
+
+  <!-- Upload PDF -->
+  <!-- <div id="uploadSection">
+    <input type="file" id="pdfFile">
+    <button onclick="uploadPDF()">Upload</button>
+    <span id="uploadStatus"></span>
+  </div> -->
+
+  <!-- Upload Section -->
+<div id="uploadSection">
+  <label for="pdfFile" class="uploadBox">
+    <span>📂 upload docs</span>
+    <input type="file" id="pdfFile" hidden>
+  </label>
+  <button onclick="uploadPDF()">Upload</button>
+  <span id="uploadStatus"></span>
+</div>
+
+  <!-- Chat -->
+  <div id="chat"></div>
+
+  <!-- Input -->
+  <div id="inputBar">
+    <input type="text" id="userInput" placeholder="Type your question...">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+const chatDiv = document.getElementById("chat");
+
+function addMessage(sender, text) {
+    const msg = document.createElement("div");
+    msg.className = sender === "User" ? "user-bubble" : "bot-bubble";
+    msg.textContent = text;
+    chatDiv.appendChild(msg);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+}
+
+
+// --------------------
+// Upload PDF
+// --------------------
+async function uploadPDF() {
+    const fileInput = document.getElementById("pdfFile");
+    const file = fileInput.files[0];
+    if (!file) {alert("Select a PDF file first");}
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("http://127.0.0.1:9798/upload-pdf/", {
+        method: "POST",
+        body: formData
+    });
+    const data = await res.json();
+    document.getElementById("uploadStatus").textContent = `Uploaded: ${data.num_chunks} chunks ✅`;
+}
+
+// --------------------
+// Chat via SSE
+// --------------------
+function sendMessage() {
+    const userInput = document.getElementById("userInput").value;
+    if (!userInput) return;
+    addMessage("User", userInput);
+    document.getElementById("userInput").value = "";
+
+    const eventSource = new EventSource(`http://127.0.0.1:9798/stream-query/?q=${encodeURIComponent(userInput)}`);
+
+    eventSource.onmessage = function(event) {
+        if (event.data === "[DONE]") {
+            eventSource.close();
+        } else {
+            addMessage("Bot", event.data);
+        }
+    };
+
+    eventSource.onerror = function(err) {
+        console.error("EventSource failed:", err);
+        eventSource.close();
+    };
+}
+</script>
+
+</body>
+</html>

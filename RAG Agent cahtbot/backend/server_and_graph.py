@@ -1,0 +1,118 @@
+
+
+
+
+
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse, JSONResponse
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.vectorstores import InMemoryVectorStore
+# from langchain.embeddings import HuggingFaceEmbeddings
+from langgraph.graph import StateGraph
+from langchain_google_genai import ChatGoogleGenerativeAI
+from typing import TypedDict
+import asyncio
+import json
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # allow all origins
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True
+)
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+# from langchain.embeddings import HuggingFaceEmbeddings
+# embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+import os
+os.environ["GOOGLE_API_KEY"] = "AIzaSyDK1CNcAhSrM4qy3UVIXLu7J7Qk2U51Rug"  # dont add direct to GoogleGenerativeAI other give credential error
+embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+vectorstore = InMemoryVectorStore(embedding)
+
+
+llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash', api_key="AIzaSyDK1CNcAhSrM4qy3UVIXLu7J7Qk2U51Rug")
+
+
+from langchain.prompts import ChatPromptTemplate
+
+rag_prompt = ChatPromptTemplate.from_messages([
+    ("system", """you are an intelligent RAG assistant, use context if available, else answer from general knowledge"""),
+    ("human", "{input}"),
+    ("system", "context: {context}")
+])
+
+class State(TypedDict):
+    answer: str
+    query: str
+
+async def rag_node(state):
+    query = state['query']
+    docs = vectorstore.as_retriever().get_relevant_documents(query)
+    context = " ".join([d.page_content for d in docs])
+    prompt = rag_prompt.format_messages(input=query, context=context)
+    response = await llm.ainvoke(prompt)
+    return {"answer": response}
+
+builder = StateGraph(State)
+builder.add_node("rag_node", rag_node)
+builder.add_edge("__start__", "rag_node")
+graph = builder.compile()
+
+
+# from langgraph.store.memory import InMemoryStore 
+# @app.post("/upload-pdf/")
+# async def upload_pdf(file: UploadFile = File(...)):
+#     file_path = f"temp_{file.filename}"
+#     with open(file_path, "wb") as f:
+#         f.write(await file.read())
+
+#     loader = PyPDFLoader(file_path)
+#     docs = loader.load()
+
+#     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+#     split_docs = splitter.split_documents(docs)
+
+#     vectorstore.add_documents(split_docs)
+#     print('file upload by')
+    # return  {"status": "PDF added", "num_chunks": "Hi"}
+    # return  {"status": "PDF added", "num_chunks": str(len(split_docs))}
+#     # return {"status": "PDF added"}
+
+
+@app.post("/upload-pdf/")
+async def upload_pdf(file: UploadFile = File(...)):
+    try:
+        file_path = f"temp_{file.filename}"
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+
+        loader = PyPDFLoader(file_path)
+        docs = loader.load()
+
+        splitter =  RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        split_docs = splitter.split_documents(docs)
+        
+        vectorstore.add_documents(split_docs)
+        print('file uploaded by user')
+        return {"status": "PDF added", "num_chunks":"hello"}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
+
+@app.get("/stream-query/")
+async def stream_query(q: str):
+    async def event_generator():
+        # Stream response in chunks
+        async for chunk in graph.astream({"query": q}):
+            # You can further split chunk['answer'] if needed for finer streaming
+            print(chunk['rag_node']['answer'].content)
+            yield f"data: {chunk['rag_node']['answer'].content}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
