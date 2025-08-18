@@ -1,7 +1,5 @@
 
-
-
-
+# file contain graph and fastapi server
 
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -15,22 +13,14 @@ from typing import TypedDict
 import asyncio
 import json
 from fastapi.middleware.cors import CORSMiddleware
-
-app = FastAPI()
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # allow origin for local development
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_credentials=True
-)
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
-
+from langchain.prompts import ChatPromptTemplate
 import os
+
 os.environ["GOOGLE_API_KEY"] = "********"  
+
+
+
 embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 vectorstore = InMemoryVectorStore(embedding)
 
@@ -38,7 +28,6 @@ vectorstore = InMemoryVectorStore(embedding)
 llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
 
 
-from langchain.prompts import ChatPromptTemplate
 
 rag_prompt = ChatPromptTemplate.from_messages([
     ("system", """you are an intelligent RAG assistant, use context if available, else answer from general knowledge"""),
@@ -66,6 +55,22 @@ graph = builder.compile()
 
 
 
+
+# fastapi server 
+
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # allow origin for local development
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True
+)
+
+
+# handle posted file  and data indexing 
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
     try:
@@ -75,7 +80,7 @@ async def upload_pdf(file: UploadFile = File(...)):
 
         loader = PyPDFLoader(file_path)
         docs = loader.load()
-
+         # chunk_size determine how long chunk string length when retrieve from  vectrostore.as_retriever('user_query') ( in this project i use 
         splitter =  RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
         split_docs = splitter.split_documents(docs)
         
@@ -91,8 +96,7 @@ async def stream_query(q: str):
     async def event_generator():
         # Stream response in chunks
         async for chunk in graph.astream({"query": q}):
-            # You can further split chunk['answer'] if needed for finer streaming
-            print(chunk['rag_node']['answer'].content)
+            # print(chunk['rag_node']['answer'].content)
             yield f"data: {chunk['rag_node']['answer'].content}\n\n"
         yield "data: [DONE]\n\n"
 
