@@ -6,7 +6,9 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.vectorstores import InMemoryVectorStore
-
+from langchain.tools.retriever import create_retriever_tool
+# create_retriver_tool(retriver,name='serach_info',description="..." )
+# it return raw string as context .
 from langgraph.graph import StateGraph
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import TypedDict
