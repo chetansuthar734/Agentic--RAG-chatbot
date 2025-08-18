@@ -53,7 +53,8 @@ async def retrieve(state:State):
 
 #  Generate Node
 async def generate(state:State):
-
+    query = state.get('query')
+    context = state.get('context')
     prompt =  rag_prompt.format_messages(input=query, context=context)
     response = await llm.ainvoke(prompt)
     return {"answer": response}
