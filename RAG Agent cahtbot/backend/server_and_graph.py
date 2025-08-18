@@ -9,7 +9,7 @@ from langchain_core.vectorstores import InMemoryVectorStore
 # from langchain.tools.retriever import create_retriever_tool
 # create_retriver_tool(retriver,name='serach_info',description="..." )
 # it return relevant text as context 
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph ,START,END
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import TypedDict
 import asyncio
@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain.prompts import ChatPromptTemplate
 import os
+from langgraph.checkpoint.memory import InMemorySaver
 
 os.environ["GOOGLE_API_KEY"] = "********"  
 
@@ -79,7 +80,8 @@ graph_builder.add_edge("retrieve", "generate")
 graph_builder.add_edge("generate", END)
 
 # Compile
-graph = graph_builder.compile(checkpointer=InMemorySaver())
+# graph = graph_builder.compile(checkpointer=InMemorySaver())
+graph = graph_builder.compile()
 
 
 
@@ -96,7 +98,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow origin for local development
+    allow_origins=["*"],  # allow  local development
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True
@@ -125,10 +127,10 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 
 @app.get("/stream-query/")
-async def stream_query(q: str):
+async def stream_query(query: str):
     async def event_generator():
         # Stream response in chunks
-        async for chunk in graph.astream({"query": q}):
+        async for chunk in graph.astream({"query": query}):
             # print(chunk['rag_node']['answer'].content)
             yield f"data: {chunk['rag_node']['answer'].content}\n\n"
         yield "data: [DONE]\n\n"
