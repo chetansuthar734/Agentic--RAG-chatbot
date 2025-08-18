@@ -1,14 +1,14 @@
 
-# file contain graph and fastapi server
+# Rag agent graph and fastapi server
 
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.vectorstores import InMemoryVectorStore
-from langchain.tools.retriever import create_retriever_tool
+# from langchain.tools.retriever import create_retriever_tool
 # create_retriver_tool(retriver,name='serach_info',description="..." )
-# it return raw string as context .
+# it return relevant text as context 
 from langgraph.graph import StateGraph
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import TypedDict
@@ -40,19 +40,50 @@ rag_prompt = ChatPromptTemplate.from_messages([
 class State(TypedDict):
     answer: str
     query: str
+    context:str
 
-async def rag_node(state):
+
+# Retrieve Node
+async def retrieve(state:State):
     query = state['query']
-    docs = vectorstore.as_retriever().get_relevant_documents(query)
+    docs = vectorstore.similarity_search(query, k=3)
     context = " ".join([d.page_content for d in docs])
-    prompt = rag_prompt.format_messages(input=query, context=context)
+    return {'context': context}
+
+#  Generate Node
+async def generate(state:State):
+
+    prompt =  rag_prompt.format_messages(input=query, context=context)
     response = await llm.ainvoke(prompt)
     return {"answer": response}
 
-builder = StateGraph(State)
-builder.add_node("rag_node", rag_node)
-builder.add_edge("__start__", "rag_node")
-graph = builder.compile()
+
+# async def rag_node(state):
+#     query = state['query']
+#     # docs = vectorstore.as_retriever().get_relevant_documents(query)
+#     context = " ".join([d.page_content for d in docs])
+#     prompt = rag_prompt.format_messages(input=query, context=context)
+#     response = await llm.ainvoke(prompt)
+#     return {"answer": response}
+
+
+
+graph_builder = StateGraph(State)
+
+graph_builder.add_node("retrieve", retrieve)
+graph_builder.add_node("generate", generate)
+
+
+graph_builder.add_edge(START, "retrieve")
+graph_builder.add_edge("retrieve", "generate")
+graph_builder.add_edge("generate", END)
+
+# Compile
+graph = graph_builder.compile(checkpointer=InMemorySaver())
+
+
+
+
 
 
 
@@ -88,7 +119,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         vectorstore.add_documents(split_docs)
         print('file uploaded by user')
-        return {"status": "PDF added", "num_chunks":"hello"}
+        return {"status": "PDF added", "num_chunks":f"{len(split_docs)}"}
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
 
