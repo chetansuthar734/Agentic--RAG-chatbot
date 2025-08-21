@@ -135,7 +135,7 @@ graph= graph_builder.compile(checkpointer=InMemorySaver())
 
 
 
-# basic RAG 
+# basic RAG ( hard coded )  , every time user query graph flow it    start -> retriver_node -> generate_node(if context is empty then  answer general ) -> END   
 
 
 # rag_prompt = ChatPromptTemplate.from_messages([
