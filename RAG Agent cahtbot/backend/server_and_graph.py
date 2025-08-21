@@ -33,57 +33,167 @@ llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
 
 
 
-rag_prompt = ChatPromptTemplate.from_messages([
-    ("system", """you are an intelligent RAG assistant, use context if available, else answer from general knowledge"""),
-    ("human", "{input}"),
-    ("system", "context: {context}")
-])
+from langgraph.graph import StateGraph, END, START
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage ,BaseMessage ,SystemMessage
+from langchain_core.tools import tool
+from langchain_community.vectorstores import FAISS
 
-class State(TypedDict,total=False):
-    answer:Optional[List[BaseMessage]]
-    query: str
-    context:Optional[str]
+from langchain.prompts import ChatPromptTemplate
 
-
-# Retrieve Node
-async def retrieve(state:State):
-    query = state['query']
-    docs = vectorstore.similarity_search(query, k=3)
-    context = " ".join([d.page_content for d in docs])
-    return {'context': context}
-
-#  Generate Node
-async def generate(state:State):
-    query = state.get('query')
-    context = state.get('context')
-    prompt =  rag_prompt.format_messages(input=query, context=context)
-    response = await llm.ainvoke(prompt)
-    return {"answer": response}
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from typing import TypedDict, List, Literal ,Optional
+from langchain_core.vectorstores import InMemoryVectorStore
 
 
-# async def rag_node(state):
+
+
+
+
+
+# === Define LLM ===
+llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash',api_key="AIzaSyDK1CNcAhSrM4qy3UVIXLu7J7Qk2U51Rug")
+
+
+
+
+embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001",google_api_key="AIzaSyDK1CNcAhSrM4qy3UVIXLu7J7Qk2U51Rug")
+vectorstore = InMemoryVectorStore(embedding)
+
+
+
+retriever = vectorstore.as_retriever()
+
+@tool
+def retrieve_docs(query: str) -> str:
+    """Search relevant context for a given query"""
+    docs = retriever.invoke(query)
+    return "\n".join([doc.page_content for doc in docs[:3]])
+
+retrieve_docs.invoke('')
+
+
+
+llm_with_tools = llm.bind_tools([retrieve_docs])
+tools_by_name = {"retrieve_docs": retrieve_docs}
+
+
+# define State
+class RAGState(TypedDict,total=False):
+    messages: Optional[List[BaseMessage]]
+    user_input: List[BaseMessage]
+    iteration:int =0
+
+  
+
+
+#  agent 
+def llm_node(state: RAGState):
+    messages = state.get("messages",[]) 
+    print(messages) 
+    user_input = state.get('user_input',[])
+    # for first invoke 
+    if not messages:
+        message = [SystemMessage(content='you are an intelligent RAG assistant, use retirver tool if needed , otherwise give general answer'),
+                   HumanMessage(content=f"{user_input}")
+                   ]
+        messages.extend(message)
+
+
+
+    
+    # llm invoke input must be a PromptValue, str, or list of BaseMessages for example : llm.invoke(input) ; input  =  " hi " or  [BaseMessage] or ChatPromptTemplate().format_messages()    
+    result = llm_with_tools.invoke(messages)
+    messages.append(result)
+    return {"messages": messages, "iteration": state.get("iteration", 0) + 1, "user_input": state["user_input"]}
+
+
+#tool_node
+def tool_node(state: RAGState):
+    print('tool call')
+    messages = state["messages"]
+    tool_calls = messages[-1].tool_calls
+    outputs = []
+    for call in tool_calls:
+        tool = tools_by_name[call["name"]]
+        output = tool.invoke(call["args"])
+        outputs.append(ToolMessage(tool_call_id=call["id"], content=output))
+    return {"messages": messages + outputs, "iteration": state["iteration"], "user_input": state["user_input"]}
+
+
+# routes
+def should_continue(state: RAGState) -> Literal["tool", END]:
+    if state["iteration"] > 2:
+        return END
+    last_msg = state["messages"][-1]
+    if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
+        return "tool"
+    return END
+
+
+# === Build Graph ===
+graph_builder = StateGraph(RAGState)
+graph_builder.add_node("llm", llm_node)
+graph_builder.add_node("tool", tool_node)
+
+graph_builder.set_entry_point("llm")
+graph_builder.add_edge("tool", "llm")
+graph_builder.add_conditional_edges("llm", should_continue, {"tool": "tool", END: END})
+
+graph= graph_builder.compile()
+
+
+# rag_prompt = ChatPromptTemplate.from_messages([
+#     ("system", """you are an intelligent RAG assistant, use context if available, else answer from general knowledge"""),
+#     ("human", "{input}"),
+#     ("system", "context: {context}")
+# ])
+
+# class State(TypedDict,total=False):
+#     answer:Optional[List[BaseMessage]]
+#     query: str
+#     context:Optional[str]
+
+
+# # Retrieve Node
+# async def retrieve(state:State):
 #     query = state['query']
-#     # docs = vectorstore.as_retriever().get_relevant_documents(query)
+#     docs = vectorstore.similarity_search(query, k=3)
 #     context = " ".join([d.page_content for d in docs])
-#     prompt = rag_prompt.format_messages(input=query, context=context)
+#     return {'context': context}
+
+# #  Generate Node
+# async def generate(state:State):
+#     query = state.get('query')
+#     context = state.get('context')
+#     prompt =  rag_prompt.format_messages(input=query, context=context)
 #     response = await llm.ainvoke(prompt)
 #     return {"answer": response}
 
 
+# # async def rag_node(state):
+# #     query = state['query']
+# #     # docs = vectorstore.as_retriever().get_relevant_documents(query)
+# #     context = " ".join([d.page_content for d in docs])
+# #     prompt = rag_prompt.format_messages(input=query, context=context)
+# #     response = await llm.ainvoke(prompt)
+# #     return {"answer": response}
 
-graph_builder = StateGraph(State)
-
-graph_builder.add_node("retrieve", retrieve)
-graph_builder.add_node("generate", generate)
 
 
-graph_builder.add_edge(START, "retrieve")
-graph_builder.add_edge("retrieve", "generate")
-graph_builder.add_edge("generate", END)
+# graph_builder = StateGraph(State)
 
-# Compile
-# graph = graph_builder.compile(checkpointer=InMemorySaver())
-graph = graph_builder.compile()
+# graph_builder.add_node("retrieve", retrieve)
+# graph_builder.add_node("generate", generate)
+
+
+# graph_builder.add_edge(START, "retrieve")
+# graph_builder.add_edge("retrieve", "generate")
+# graph_builder.add_edge("generate", END)
+
+# # Compile
+# # graph = graph_builder.compile(checkpointer=InMemorySaver())
+# graph = graph_builder.compile()
 
 
 
