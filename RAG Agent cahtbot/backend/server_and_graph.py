@@ -1,8 +1,14 @@
 
 # Rag agent graph and fastapi server
 
+import asyncio
+import json
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+
+
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.vectorstores import InMemoryVectorStore
@@ -10,30 +16,14 @@ from langchain_core.vectorstores import InMemoryVectorStore
 # create_retriver_tool(retriver,name='serach_info',description="..." )
 # it return relevant text as context 
 from langgraph.graph import StateGraph ,START,END
-from langchain_google_genai import ChatGoogleGenerativeAI
-from typing import TypedDict ,List ,Optional
-import asyncio
-import json
-from fastapi.middleware.cors import CORSMiddleware
+
+
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.prompts import ChatPromptTemplate 
+
 import os
 from langgraph.checkpoint.memory import InMemorySaver
-from langchain_core.messages import BaseMessage ,ToolMessage,HumanMessage , SystemMessage
-
-os.environ["GOOGLE_API_KEY"] = "********"  
 
 
-
-embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-vectorstore = InMemoryVectorStore(embedding)
-
-
-llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
-
-
-
-from langgraph.graph import StateGraph, END, START
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage ,BaseMessage ,SystemMessage
 from langchain_core.tools import tool
 from langchain_community.vectorstores import FAISS
@@ -41,14 +31,13 @@ from langchain_community.vectorstores import FAISS
 from langchain.prompts import ChatPromptTemplate
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
 from typing import TypedDict, List, Literal ,Optional
-from langchain_core.vectorstores import InMemoryVectorStore
 
 
 
 
-
+os.environ["GOOGLE_API_KEY"] = "********"  
 
 
 # === Define LLM ===
@@ -242,7 +231,7 @@ async def upload_pdf(file: UploadFile = File(...)):
 async def stream_query(query: str):
     async def event_generator():
         # Stream response in chunks
-        async for chunk in graph.astream({"query": query}):
+        async for chunk in graph.astream({"user_input": query}):
             # print(chunk['rag_node']['answer'].content)
             yield f"data: {chunk['rag_node']['answer'].content}\n\n"
         yield "data: [DONE]\n\n"
