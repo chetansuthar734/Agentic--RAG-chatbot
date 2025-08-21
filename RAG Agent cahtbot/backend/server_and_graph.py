@@ -11,14 +11,15 @@ from langchain_core.vectorstores import InMemoryVectorStore
 # it return relevant text as context 
 from langgraph.graph import StateGraph ,START,END
 from langchain_google_genai import ChatGoogleGenerativeAI
-from typing import TypedDict
+from typing import TypedDict ,List ,Optional
 import asyncio
 import json
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.prompts import ChatPromptTemplate
+from langchain.prompts import ChatPromptTemplate 
 import os
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.messages import BaseMessage ,ToolMessage,HumanMessage , SystemMessage
 
 os.environ["GOOGLE_API_KEY"] = "********"  
 
@@ -39,9 +40,9 @@ rag_prompt = ChatPromptTemplate.from_messages([
 ])
 
 class State(TypedDict,total=False):
-    answer: str
+    answer:Optional[List[BaseMessage]]
     query: str
-    context:str
+    context:Optional[str]
 
 
 # Retrieve Node
