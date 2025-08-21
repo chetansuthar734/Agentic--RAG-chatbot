@@ -38,7 +38,7 @@ rag_prompt = ChatPromptTemplate.from_messages([
     ("system", "context: {context}")
 ])
 
-class State(TypedDict):
+class State(TypedDict,total=False):
     answer: str
     query: str
     context:str
