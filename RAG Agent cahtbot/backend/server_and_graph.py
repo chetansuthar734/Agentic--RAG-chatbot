@@ -129,7 +129,13 @@ graph_builder.set_entry_point("llm")
 graph_builder.add_edge("tool", "llm")
 graph_builder.add_conditional_edges("llm", should_continue, {"tool": "tool", END: END})
 
-graph= graph_builder.compile()
+graph= graph_builder.compile(checkpointer=InMemorySaver())
+
+
+
+
+
+# basic RAG 
 
 
 # rag_prompt = ChatPromptTemplate.from_messages([
